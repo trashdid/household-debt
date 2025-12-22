@@ -4,7 +4,8 @@ CREATE TABLE housing.public.states
     name      varchar(13) NOT NULL,
     code      varchar(2)  NOT NULL,
     fips_code integer     NOT NULL,
-    UNIQUE (code, fips_code)
+    UNIQUE (code),
+    UNIQUE (fips_code)
 );
 
 CREATE TABLE housing.public.county
