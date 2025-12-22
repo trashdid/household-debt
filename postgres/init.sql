@@ -1,3 +1,24 @@
+CREATE SCHEMA IF NOT EXISTS staging;
+CREATE SCHEMA IF NOT EXISTS housing;
+
+CREATE TABLE IF NOT EXISTS staging.fips_ref_raw
+(
+    state       text,
+    state_abbr  text,
+    state_fips  text,
+    county_fips text,
+    county_name text
+);
+
+CREATE TABLE IF NOT EXISTS staging.debt_raw
+(
+  year int,
+  qtr int,
+  area_fipps text,
+  low real,
+  high real
+);
+
 CREATE TABLE housing.public.states
 (
     id        serial PRIMARY KEY,
