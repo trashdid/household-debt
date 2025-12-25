@@ -6,6 +6,6 @@ class StatesService:
     def __init__(self, repository: StatesRepository):
         self.repository = repository
 
-    async def get_states(self) -> list[State]:
-        states = await self.repository.get_states()
+    async def get_states(self, name: str | None, code: str | None, fips_code: str | None) -> list[State]:
+        states = await self.repository.get_states(name, code, fips_code)
         return states

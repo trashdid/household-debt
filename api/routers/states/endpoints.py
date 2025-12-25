@@ -9,6 +9,12 @@ router = APIRouter(
     tags=["States"],
 )
 
-@router.get("/")
-async def states(service: StatesService = Depends(get_states_service)) -> list[State]:
-    return await service.get_states()
+@router.get(
+    path="/",
+    response_model=list[State],
+    summary="Get state information",
+    description="Get all state information or specific state info by query params",
+    status_code=200,
+)
+async def states(service: StatesService = Depends(get_states_service), name: str | None = None, code: str | None = None, fips_code: str | None = None) -> list[State]:
+    return await service.get_states(name, code, fips_code)

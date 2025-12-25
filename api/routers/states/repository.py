@@ -7,7 +7,7 @@ class StatesRepository:
     def __init__(self, pool: AsyncConnectionPool):
         self.pool = pool
 
-    async def get_states(self) -> list[State]:
+    async def get_states(self, name: str | None, code: str | None, fips_code: str | None) -> list[State]:
         async with self.pool.connection() as conn:
                 query = """
                             SELECT
@@ -16,7 +16,26 @@ class StatesRepository:
                                 fips_code
                             FROM core.states
                         """
-                cursor = await conn.execute(query)
+
+                filters = []
+                params = {}
+
+                if name is not None:
+                    filters.append("name = %(name)s")
+                    params["name"] = name.upper()
+
+                if code is not None:
+                    filters.append("code = %(code)s")
+                    params["code"] = code.upper()
+
+                if fips_code is not None:
+                    filters.append("fips_code = %(fips_code)s")
+                    params["fips_code"] = fips_code
+
+                if filters:
+                    query += " WHERE " + " AND ".join(filters)
+
+                cursor = await conn.execute(query, params)
                 results = await cursor.fetchall()
 
         response = []
