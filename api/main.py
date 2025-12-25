@@ -5,13 +5,10 @@ import os
 
 from fastapi import FastAPI
 from scalar_fastapi import get_scalar_api_reference
-from dotenv import load_dotenv
 
 from api.db import open_db, close_db
 from api.routers import states_router
 
-# TODO: Replace when integrated with docker-compose so fully dependent on that
-# load_dotenv(dotenv_path="../.env")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
