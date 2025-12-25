@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 @router.get(
-    path="/",
+    path="",
     response_model=list[State],
     summary="Get state information",
     description="Get all state information or specific state info by query params",
@@ -20,9 +20,23 @@ router = APIRouter(
         404: {"detail": "No State data found"},
     }
 )
-async def states(service: StatesService = Depends(get_states_service), name: str | None = None, code: str | None = None, fips_code: str | None = None) -> list[State]:
+async def get_states(service: StatesService = Depends(get_states_service), name: str | None = None, code: str | None = None, fips_code: str | None = None) -> list[State]:
     response = await service.get_states(name, code, fips_code)
-
-    if len(response) == 0:
-        raise HTTPException(status_code=404, detail="No State data found")
     return response
+
+@router.get(
+    path="/{state_code}",
+    response_model=State,
+    summary="Get specific state information",
+    description="Get state information by state code",
+    status_code=200,
+    responses={
+        404: {"detail": "No State data found"},
+    }
+)
+async def get_state_by_code(state_code: str, service: StatesService = Depends(get_states_service)) -> State:
+    response = await service.get_state_by_code(state_code)
+
+    if response is not None:
+        return response
+    raise HTTPException(status_code=404, detail=f"No State data found for state code {state_code}")
