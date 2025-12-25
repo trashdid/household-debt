@@ -1,10 +1,33 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
+import os
 
 from fastapi import FastAPI
 from scalar_fastapi import get_scalar_api_reference
+from dotenv import load_dotenv
 
+from api.db import open_db, close_db
+from api.routers import states_router
 
-app = FastAPI()
+# TODO: Replace when integrated with docker-compose so fully dependent on that
+# load_dotenv(dotenv_path="../.env")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await open_db()
+    yield
+    await close_db()
+
+app = FastAPI(
+    title="Household Debt API",
+    description="API to provide data for household debt information from data.gov",
+    version=os.getenv("API_VERSION", "Not Found"),
+    root_path="/api",
+    lifespan=lifespan,
+)
+
+app.include_router(states_router)
 
 @app.get("/health")
 async def health_check():
