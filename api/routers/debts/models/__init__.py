@@ -1,1 +1,1 @@
-from .debt import Debt
+from .debt import Debt, DebtExtended

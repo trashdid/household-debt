@@ -63,7 +63,7 @@ FROM t
          INNER JOIN core.states states
                     ON states.code = t.state_code
 WHERE t.county_name IS NOT NULL
-    AND t.county_code IS NOT NULL
+  AND t.county_code IS NOT NULL
 GROUP BY states.id, t.county_name, t.county_code;
 
 DROP TABLE t;

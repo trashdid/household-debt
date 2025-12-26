@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from scalar_fastapi import get_scalar_api_reference
 
 from api.db import open_db, close_db
-from api.routers import states_router, counties_router
+from api.routers import states_router, counties_router, debts_router
 
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ app = FastAPI(
 
 app.include_router(states_router)
 app.include_router(counties_router)
+app.include_router(debts_router)
 
 @app.get("/health")
 async def health_check():
