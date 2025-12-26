@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS core.states
 CREATE TABLE IF NOT EXISTS core.county
 (
     id        serial PRIMARY KEY,
-    state_id  integer NOT NULL REFERENCES core.states (id),
-    name      varchar(30),
-    fips_code varchar(4),
+    state_id  integer     NOT NULL REFERENCES core.states (id),
+    name      varchar(30) NOT NULL,
+    fips_code varchar(4)  NOT NULL,
     UNIQUE (fips_code, state_id)
 );
 
@@ -62,6 +62,8 @@ SELECT states.id, t.county_name, right(t.county_code, 3)
 FROM t
          INNER JOIN core.states states
                     ON states.code = t.state_code
+WHERE t.county_name IS NOT NULL
+  AND t.county_code IS NOT NULL
 GROUP BY states.id, t.county_name, t.county_code;
 
 DROP TABLE t;
@@ -82,10 +84,10 @@ COPY t (year, qtr, area_fips, low, high)
 INSERT INTO core.debt (date, low, high, county_id)
 SELECT make_date(t.year, (t.qtr - 1) * 3 + 1, 1) AS date, t.low, t.high, c.id
 FROM t
-INNER JOIN core.states s
-    ON s.fips_code = left(t.area_fips, 2)
-INNER JOIN core.county c
-    ON c.state_id = s.id
-    AND c.fips_code = right(t.area_fips, 3);
+         INNER JOIN core.states s
+                    ON s.fips_code = left(t.area_fips, 2)
+         INNER JOIN core.county c
+                    ON c.state_id = s.id
+                        AND c.fips_code = right(t.area_fips, 3);
 
 DROP TABLE t;
