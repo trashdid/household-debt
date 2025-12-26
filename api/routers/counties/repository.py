@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from psycopg_pool import AsyncConnectionPool
 
 from api.routers.counties.models import CountyExtended
+from api.routers.debts.models import Debt
 
 
 class CountiesRepository:
@@ -43,3 +44,46 @@ class CountiesRepository:
         for row in result:
             response.append(CountyExtended.model_validate(row))
         return response
+
+    async def get_county_by_fips(self, fips_code: str) -> CountyExtended:
+        async with self.pool.connection() as conn:
+            query = """
+                    SELECT c.name as name,
+                           concat(s.fips_code,c.fips_code) as fips_code,
+                           s.code as state_code
+                    FROM core.county c
+                             INNER JOIN core.states s
+                                        ON c.state_id = s.id
+                    WHERE concat(s.fips_code,c.fips_code) = %(fips_code)s
+            """
+
+            cursor = await conn.execute(query, {"fips_code": fips_code})
+            result = await cursor.fetchall()
+
+            if len(result) == 0:
+                raise HTTPException(status_code=404, detail=f"County not found for fips code: {fips_code}")
+
+            return CountyExtended.model_validate(result[0])
+
+    async def get_debt_by_county_fips(self, fips_code: str) -> list[Debt]:
+        async with self.pool.connection() as conn:
+            query = """
+                    SELECT d.date,
+                            d.low,
+                            d.high
+                    FROM core.debt d
+                        INNER JOIN core.county c on c.id = d.county_id
+                        INNER JOIN core.states s on c.state_id = s.id
+                    WHERE concat(s.fips_code, c.fips_code) = %(fips_code)s
+            """
+
+            cursor = await conn.execute(query, {"fips_code": fips_code})
+            result = await cursor.fetchall()
+
+            if len(result) == 0:
+                raise HTTPException(status_code=404, detail=f"Debt not found for fips code: {fips_code}")
+
+            response = []
+            for row in result:
+                response.append(Debt.model_validate(row))
+            return response
