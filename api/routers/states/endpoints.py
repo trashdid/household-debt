@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
-from starlette.exceptions import HTTPException
 
-from api.di import get_states_service
+from api.routers.states.dependencies import get_states_service
 from api.routers.counties.models import County
 from api.routers.states.models import State
 from api.routers.states.service import StatesService

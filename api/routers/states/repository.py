@@ -33,7 +33,7 @@ class StatesRepository:
                 filters.append("fips_code = %(fips_code)s")
                 params["fips_code"] = fips_code
 
-            if filters:
+            if len(filters) > 0:
                 query += " WHERE " + " AND ".join(filters)
 
             cursor = await conn.execute(query, params)

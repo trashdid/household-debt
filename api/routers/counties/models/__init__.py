@@ -1,1 +1,1 @@
-from .county import County
+from .county import County, CountyExtended
