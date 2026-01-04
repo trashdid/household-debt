@@ -15,6 +15,7 @@ class DebtExtended(Debt):
     fips_code: Annotated[str, Field(description="FIPS code for the County", examples=["26125"])]
 
 class StateDebt(BaseModel):
+    state: Annotated[str, Field(description="State")]
     average_debt: Annotated[float, Field(description="Average debt ratio", examples=[0.4])]
     number_of_counties: Annotated[int, Field(description="Number of Counties", examples=[2])]
     fips_code: Annotated[str, Field(description="FIPS code for the State", examples=["26"])]

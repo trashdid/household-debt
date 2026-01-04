@@ -74,7 +74,8 @@ class DebtsRepository:
     async def get_state_debt(self, state_code: str | None, start_date: datetime, end_date: datetime) -> list[StateDebt]:
         async with self.pool.connection() as conn:
             query = """
-                    SELECT AVG((COALESCE(d.low, 0) + COALESCE(d.high, 0)) / 2.0) AS average_debt,
+                    SELECT s.name as state,
+                           AVG((COALESCE(d.low, 0) + COALESCE(d.high, 0)) / 2.0) AS average_debt,
                            COUNT(DISTINCT c.id)                                  AS number_of_counties,
                            s.fips_code
                     FROM core.county c
@@ -85,14 +86,14 @@ class DebtsRepository:
             """
 
             management = """
-                GROUP BY s.fips_code;
+                GROUP BY s.fips_code, state;
             """
 
             params = {}
 
             if state_code is not None:
                 query+="AND s.code = %(state_code)s"
-                params["state"] = state_code.upper()
+                params["state_code"] = state_code.upper()
 
             params.update({"start_date": start_date, "end_date": end_date})
 
