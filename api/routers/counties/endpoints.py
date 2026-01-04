@@ -18,7 +18,7 @@ router = APIRouter(
     description="Get all counties information",
     status_code=200,
     responses={
-        404: {"detail": "No County data found"}
+        404: {"description": "No County data found"},
     }
 )
 async def get_counties(service: CountiesService = Depends(get_counties_service), name: str | None = None,
@@ -34,7 +34,7 @@ async def get_counties(service: CountiesService = Depends(get_counties_service),
     description="Get specific county details",
     status_code=200,
     responses={
-        404: {"detail": "No County data found"}
+        404: {"description": "No County data found"},
     }
 )
 async def get_county_by_fips(fips_code: str, service: CountiesService = Depends(get_counties_service)) -> CountyExtended:
@@ -49,7 +49,7 @@ async def get_county_by_fips(fips_code: str, service: CountiesService = Depends(
     description="Get specific county debt details",
     status_code=200,
     responses={
-        404: {"detail": "No County data found"}
+        404: {"description": "No County data found"},
     }
 )
 async def get_debt_by_county_fips(fips_code: str, service: CountiesService = Depends(get_counties_service)) -> list[Debt]:

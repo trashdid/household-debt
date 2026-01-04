@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from psycopg_pool import AsyncConnectionPool
 
 from api.routers.debts.models import DebtExtended
+from api.routers.debts.models.debt import StateDebt
 
 
 class DebtsRepository:
@@ -23,8 +24,8 @@ class DebtsRepository:
                     FROM core.county c
                              INNER JOIN core.debt d on c.id = d.county_id
                              INNER JOIN core.states s on s.id = c.state_id
-                    WHERE d.date BETWEEN %(start_date)s AND %(end_date)s
-            """
+                    WHERE d.date BETWEEN %(start_date)s AND %(end_date)s \
+                    """
             management = """
                     GROUP BY c.name, s.name, concat(s.fips_code, c.fips_code), d.date, d.low, d.high
                     ORDER BY d.date ASC
@@ -50,7 +51,7 @@ class DebtsRepository:
             if len(filters) > 0:
                 query += " AND " + " AND ".join(filters)
 
-            query+=management
+            query += management
 
             params.update({
                 "start_date": start_date,
@@ -68,4 +69,41 @@ class DebtsRepository:
         response = []
         for row in result:
             response.append(DebtExtended.model_validate(row))
+        return response
+
+    async def get_state_debt(self, state_code: str | None, start_date: datetime, end_date: datetime) -> list[StateDebt]:
+        async with self.pool.connection() as conn:
+            query = """
+                    SELECT AVG((COALESCE(d.low, 0) + COALESCE(d.high, 0)) / 2.0) AS average_debt,
+                           COUNT(DISTINCT c.id)                                  AS number_of_counties,
+                           s.fips_code
+                    FROM core.county c
+                             INNER JOIN core.debt d ON c.id = d.county_id
+                             INNER JOIN core.states s ON s.id = c.state_id
+                    WHERE %(start_date)s <= d.date
+                      AND d.date < %(end_date)s
+            """
+
+            management = """
+                GROUP BY s.fips_code;
+            """
+
+            params = {}
+
+            if state_code is not None:
+                query+="AND s.code = %(state_code)s"
+                params["state"] = state_code.upper()
+
+            params.update({"start_date": start_date, "end_date": end_date})
+
+            query+=management
+
+            cursor = await conn.execute(query, params)
+            result = await cursor.fetchall()
+
+            response = []
+
+            for row in result:
+                response.append(StateDebt.model_validate(row))
+
         return response

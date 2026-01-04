@@ -4,6 +4,7 @@ import uvicorn
 import os
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from scalar_fastapi import get_scalar_api_reference
 
 from api.db import open_db, close_db
@@ -22,6 +23,20 @@ app = FastAPI(
     version=os.getenv("API_VERSION", "Not Found"),
     root_path="/api",
     lifespan=lifespan,
+)
+
+# TODO: Remove before pushing and make sure it works in Docker
+origins = [
+    "http://localhost:5173",  # Your Vite/React frontend
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,            # Allows specific origins
+    allow_credentials=True,
+    allow_methods=["*"],              # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"],              # Allows all headers
 )
 
 app.include_router(states_router)

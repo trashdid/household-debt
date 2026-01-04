@@ -30,9 +30,12 @@ CREATE TABLE IF NOT EXISTS core.debt
             CHECK (
                 EXTRACT(MONTH FROM date) IN (1, 4, 7, 10)
                     AND EXTRACT(DAY FROM date) = 1
-                ),
-    CONSTRAINT debt_unique_county_date UNIQUE (county_id, date)
+                )
 );
+
+CREATE UNIQUE INDEX debt_optimized_covering_idx
+ON core.debt (county_id, date)
+INCLUDE (low, high);
 
 CREATE TEMPORARY TABLE t
 (
@@ -68,6 +71,8 @@ GROUP BY states.id, t.county_name, t.county_code;
 
 DROP TABLE t;
 
+VACUUM ANALYZE;
+
 CREATE TEMPORARY TABLE t
 (
     year      int,
@@ -91,3 +96,5 @@ FROM t
                         AND c.fips_code = right(t.area_fips, 3);
 
 DROP TABLE t;
+
+VACUUM ANALYZE;
