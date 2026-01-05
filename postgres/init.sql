@@ -37,6 +37,10 @@ CREATE UNIQUE INDEX debt_optimized_covering_idx
 ON core.debt (county_id, date)
 INCLUDE (low, high);
 
+CREATE INDEX idx_debt_date_performance
+ON core.debt (date)
+INCLUDE (county_id, low, high);
+
 CREATE TEMPORARY TABLE t
 (
     state_name           varchar,

@@ -1,0 +1,15 @@
+node_modules/
+package-lock.json
+
+# Build outputs
+out/
+
+# IDE files
+.idea/
+.vscode/
+
+# Assets
+public/
+*.png
+*.jpg
+*.svg

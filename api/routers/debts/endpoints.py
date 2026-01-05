@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.routers.debts.dependencies import get_debts_service
 from api.routers.debts.models import DebtExtended
-from api.routers.debts.models.debt import StateDebt
+from api.routers.debts.models.debt import StateDebt, CountyDebt
 from api.routers.debts.service import DebtsService
 
 router = APIRouter(
@@ -70,4 +70,41 @@ async def get_state_debt(
         service: DebtsService = Depends(get_debts_service),
 ) -> StateDebt:
     response = await service.get_state_debt(state_code, start_date, end_date)
+    return response
+
+@router.get(
+    path="/counties",
+    response_model=list[CountyDebt],
+    summary="Get all county debt",
+    description="Get all county debt details",
+    status_code=200,
+    responses={
+        404: {"description": "No Debt data found"},
+    }
+)
+async def get_counties_debt(
+        start_date: datetime = Query(default="1999-01-01T00:00:00"),
+        end_date: datetime | None = Query(default=datetime.now()),
+        service: DebtsService = Depends(get_debts_service),
+) -> list[CountyDebt]:
+    response = await service.get_counties_debt(start_date, end_date)
+    return response
+
+@router.get(
+    path="/counties/{fips_code}",
+    response_model=CountyDebt,
+    summary="Get county debt",
+    description="Get county debt details",
+    status_code=200,
+    responses={
+        404: {"description": "No Debt data found"},
+    }
+)
+async def get_county_debt(
+        fips_code: str,
+        start_date: datetime = Query(default="1999-01-01T00:00:00"),
+        end_date: datetime | None = Query(default=datetime.now()),
+        service: DebtsService = Depends(get_debts_service),
+) -> CountyDebt:
+    response = await service.get_county_debt(fips_code, start_date, end_date)
     return response

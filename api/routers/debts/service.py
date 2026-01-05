@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import HTTPException
 from starlette import status
 
-from api.routers.debts.models import DebtExtended
+from api.routers.debts.models import DebtExtended, CountyDebt
 from api.routers.debts.models.debt import StateDebt
 from api.routers.debts.repository import DebtsRepository
 
@@ -31,3 +31,19 @@ class DebtsService:
             return debts
 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Debt not found for states")
+
+    async def get_county_debt(self, fips_code: str, start_date: datetime, end_date: datetime) -> CountyDebt:
+        debts = await self.repository.get_county_debt(fips_code, start_date, end_date)
+
+        if len(debts) > 0:
+            return debts[0]
+
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Debt not found for {fips_code}")
+
+    async def get_counties_debt(self, start_date: datetime, end_date: datetime) -> list[CountyDebt]:
+        debts = await self.repository.get_county_debt(None, start_date, end_date)
+
+        if len(debts) > 0:
+            return debts
+
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Debt not found for counties")

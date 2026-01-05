@@ -1,0 +1,12 @@
+path {
+	outline: none !important;
+	-webkit-tap-highlight-color: transparent;
+}
+
+path:focus {
+	outline: none !important;
+}
+
+path:active {
+	outline: none !important;
+}
