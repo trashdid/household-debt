@@ -1,7 +1,6 @@
 import {
 	Autocomplete,
 	Box,
-	CircularProgress,
 	Slider,
 	TextField,
 	Tooltip,
@@ -23,7 +22,7 @@ import MapLegend from '../../components/MapLegend'
 
 const MAP_LAYERS = {
 	State: '/data/states-10m.json',
-	County: '/data/counties-10m.json', // Ensure this file exists in your public folder
+	County: '/data/counties-10m.json',
 }
 
 const Home = () => {
@@ -39,7 +38,6 @@ const Home = () => {
 	>(null)
 	const [hoveredState, setHoveredState] = useState<string | null>(null)
 	const [mapType, setMapType] = useState<string>('State')
-	const [loadingMap, setLoadingMap] = useState<boolean>(false)
 
 	const geoUrl = MAP_LAYERS[mapType as keyof typeof MAP_LAYERS]
 	const sliderMarks = [
@@ -122,7 +120,6 @@ const Home = () => {
 	useEffect(() => {
 		const fetchHeatmapData = async () => {
 			const { startDate, endDate } = getQuarterDates(timeIndex)
-			setLoadingMap(true)
 			try {
 				let response
 				if (mapType === 'County') {
@@ -139,8 +136,6 @@ const Home = () => {
 				setHeatmapData(response.data)
 			} catch (error) {
 				console.error('Failed to fetch heatmap data', error)
-			} finally {
-				setLoadingMap(false)
 			}
 		}
 
