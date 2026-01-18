@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
 	CountyDebt,
+	CountyExtended,
 	Debt,
 	State,
 	StateDebt,
@@ -27,7 +28,11 @@ const MAP_LAYERS = {
 
 const Home = () => {
 	const [states, setStates] = useState<State[]>([])
+	const [countys, setCountys] = useState<CountyExtended[]>([])
 	const [currentState, setCurrentState] = useState<State | null>(null)
+	const [currentCounty, setCurrentCounty] = useState<CountyExtended | null>(
+		null
+	)
 	const [timeIndex, setTimeIndex] = useState<number>(104)
 	const [data, setData] = useState<Debt[]>([])
 	const [heatmapData, setHeatmapData] = useState<StateDebt[] | CountyDebt[]>(
@@ -38,6 +43,7 @@ const Home = () => {
 	>(null)
 	const [hoveredState, setHoveredState] = useState<string | null>(null)
 	const [mapType, setMapType] = useState<string>('State')
+	const [selectedFips, setSelectedFips] = useState<string | null>(null)
 
 	const geoUrl = MAP_LAYERS[mapType as keyof typeof MAP_LAYERS]
 	const sliderMarks = [
@@ -49,8 +55,9 @@ const Home = () => {
 		{ value: 104, label: '2025' },
 	]
 	const colorScale = useMemo(() => {
+		const maxRatio = mapType === 'State' ? 2.1 : 3.0
 		return scaleSequential()
-			.domain([0.5, 2.5]) // The min and max debt ratios
+			.domain([0.0, maxRatio]) // The min and max debt ratios
 			.interpolator(interpolateViridis)
 	}, [])
 
@@ -78,7 +85,6 @@ const Home = () => {
 
 	const handleSliderChange = (_event: Event, newValue: number | number[]) => {
 		setTimeIndex(newValue as number)
-		console.log('Selected Period:', getQuarterLabel(newValue as number))
 	}
 
 	const handleSliderCommitted = (
@@ -88,28 +94,28 @@ const Home = () => {
 		const index = newValue as number
 		const { startDate, endDate } = getQuarterDates(index)
 
-		console.log('-----------------------------------------')
-		console.log(`FETCH INITIATED: ${getQuarterLabel(index)}`)
-		console.log(`Parameters: startDate: ${startDate}, endDate: ${endDate}`)
-		console.log('-----------------------------------------')
-
 		api.debts
 			.getDebtsDebtsGet({
 				startDate: startDate,
 				endDate: endDate,
 			})
 			.then((response) => setData(response.data))
-			.finally(() => console.log(data))
 	}
 
 	useEffect(() => {
 		const loadData = async () => {
 			try {
-				const response = await api.states.getStatesStatesGet()
-				const sortedStates = response.data.sort((a, b) =>
+				const responseStates = await api.states.getStatesStatesGet()
+				const sortedStates = responseStates.data.sort((a, b) =>
 					a.name.localeCompare(b.name)
 				)
 				setStates(sortedStates)
+				const responseCounties =
+					await api.counties.getCountiesCountiesGet()
+				const sortedCounties = responseCounties.data.sort((a, b) =>
+					a.name.localeCompare(b.name)
+				)
+				setCountys(sortedCounties)
 			} catch (error) {
 				console.error('Failed to fetch states', error)
 			}
@@ -149,36 +155,38 @@ const Home = () => {
 	const handleMouseDown = useCallback(
 		async (geo: any) => {
 			const { startDate, endDate } = getQuarterDates(timeIndex)
+
 			if (mapType === 'County') {
 				const fipsCode = geo.id.toString().padStart(5, '0')
+				setSelectedFips(fipsCode) // Link selection
 				try {
-					const response =
-						await api.debts.getCountyDebtDebtsCountiesFipsCodeGet({
-							fipsCode,
-							startDate,
-							endDate,
-						})
+					const response = await api.debts.getCountyDebtDebtsCountiesFipsCodeGet({
+						fipsCode,
+						startDate,
+						endDate,
+					})
 					setCurrentStateDebt(response.data)
+					const countyObj = countys.find(c => c.fips_code === fipsCode)
+					if (countyObj) setCurrentCounty(countyObj)
 				} catch (error) {
 					console.error('County fetch failed', error)
 				}
 			} else {
 				const stateName = geo.properties.name
-				const stateObj = states.find(
-					(s) => s.name === stateName.toUpperCase()
-				)
+				const stateObj = states.find((s) => s.name === stateName.toUpperCase())
 
 				if (stateObj) {
 					setCurrentState(stateObj)
+					// ADD THIS: Ensure State highlights on click
+					const stateFips = geo.id.toString().padStart(2, '0')
+					setSelectedFips(stateFips)
+
 					try {
-						const response =
-							await api.debts.getStateDebtDebtsStatesStateCodeGet(
-								{
-									stateCode: stateObj.code,
-									startDate,
-									endDate,
-								}
-							)
+						const response = await api.debts.getStateDebtDebtsStatesStateCodeGet({
+							stateCode: stateObj.code,
+							startDate,
+							endDate,
+						})
 						setCurrentStateDebt(response.data)
 					} catch (error) {
 						console.error('Debt fetch failed', error)
@@ -187,7 +195,7 @@ const Home = () => {
 				}
 			}
 		},
-		[timeIndex, mapType]
+		[timeIndex, mapType, states, countys]
 	)
 
 	useEffect(() => {
@@ -273,7 +281,7 @@ const Home = () => {
 						title={hoveredState || ''}
 						followCursor
 						arrow
-						disableInteractive // Better performance for simple labels
+						disableInteractive
 						enterTouchDelay={0}
 					>
 						<ComposableMap
@@ -291,33 +299,36 @@ const Home = () => {
 											.toString()
 											.padStart(isCounty ? 5 : 2, '0')
 										const areaData = statesDataMap.get(fips)
+										const isSelected = selectedFips === fips // Logical link
+
 										return (
 											<Geography
 												key={geo.rsmKey}
 												geography={geo}
-												onMouseEnter={() =>
-													setHoveredState(
-														geo.properties.name
-													)
-												}
-												onMouseLeave={() =>
-													setHoveredState(null)
-												}
-												onMouseDown={() =>
-													handleMouseDown(geo)
-												}
+												onMouseEnter={() => setHoveredState(geo.properties.name)}
+												onMouseLeave={() => setHoveredState(null)}
+												onMouseDown={() => handleMouseDown(geo)}
 												fill={
-													areaData
-														? colorScale(
-																areaData.average_debt
-															)
-														: '#F5F5F5'
+													isSelected
+														? '#3b82f6' // Highlight color for dropdown selection
+														: areaData
+															? colorScale(
+																	areaData.average_debt
+																)
+															: '#F5F5F5'
+												}
+												stroke={
+													isSelected
+														? '#FFFFFF'
+														: '#DDD'
+												} // Add white border to selection
+												strokeWidth={
+													isSelected ? 2 : 0.5
 												}
 												style={{
 													default: {
 														outline: 'none',
-														transition:
-															'fill 0.3s ease',
+														transition: 'all 0.2s',
 													},
 													hover: {
 														fill: '#60a5fa',
@@ -347,68 +358,123 @@ const Home = () => {
 					}}
 				>
 					<Typography variant="h6">Filters</Typography>
+
 					<Autocomplete
 						options={Object.keys(MAP_LAYERS)}
 						value={mapType}
 						onChange={(_event, newValue) => {
-							if (newValue) setMapType(newValue)
+							if (newValue) {
+								setMapType(newValue)
+								setCurrentState(null)
+								setCurrentCounty(null)
+								setCurrentStateDebt(null)
+							}
 						}}
 						renderInput={(params) => (
 							<TextField {...params} label="Select Map View" />
 						)}
-						sx={{ width: '100%' }}
 					/>
-					<Autocomplete
-						value={currentState}
-						options={states}
-						getOptionLabel={(option) => toTitleCase(option.name)}
-						onChange={(_event, newValue) => {
-							if (newValue) {
-								setCurrentState(newValue)
-								const { startDate, endDate } =
-									getQuarterDates(timeIndex)
-								api.debts
-									.getStateDebtDebtsStatesStateCodeGet({
-										stateCode: newValue.code,
-										startDate,
-										endDate,
-									})
-									.then((res) =>
-										setCurrentStateDebt(res.data)
-									)
+
+					{mapType === 'State' ? (
+						<Autocomplete
+							value={currentState}
+							options={states}
+							getOptionLabel={(option) =>
+								toTitleCase(option.name)
 							}
-						}}
-						renderInput={(params) => (
-							<TextField {...params} label="Select State" />
-						)}
-						sx={{
-							width: '100%',
-						}}
-					/>
+							onChange={(_event, newValue) => {
+								if (newValue) {
+									setCurrentState(newValue)
+									const { startDate, endDate } =
+										getQuarterDates(timeIndex)
+									api.debts
+										.getStateDebtDebtsStatesStateCodeGet({
+											stateCode: newValue.code,
+											startDate,
+											endDate,
+										})
+										.then((res) =>
+											setCurrentStateDebt(res.data)
+										)
+								}
+							}}
+							renderInput={(params) => (
+								<TextField {...params} label="Search States" />
+							)}
+						/>
+					) : (
+						<Autocomplete
+							value={currentCounty}
+							options={countys}
+							getOptionLabel={(option) =>
+								`${toTitleCase(option.name)}, ${option.state_code}`
+							}
+							onChange={(_event, newValue) => {
+								if (newValue) {
+									setCurrentCounty(newValue)
+									setSelectedFips(newValue.fips_code)
+									const { startDate, endDate } =
+										getQuarterDates(timeIndex)
+									api.debts
+										.getCountyDebtDebtsCountiesFipsCodeGet({
+											fipsCode: newValue.fips_code,
+											startDate,
+											endDate,
+										})
+										.then((res) =>
+											setCurrentStateDebt(res.data)
+										)
+								}
+							}}
+							renderInput={(params) => (
+								<TextField
+									{...params}
+									label="Search Counties"
+								/>
+							)}
+						/>
+					)}
+
 					{currentStateDebt && (
-						<>
-							<Typography variant="body2">
+						<Box
+							sx={{
+								mt: 2,
+								p: 2,
+								bgcolor: 'background.paper',
+								borderRadius: 1,
+								boxShadow: 1,
+								borderLeft: '4px solid #60a5fa',
+							}}
+						>
+							<Typography
+								variant="subtitle1"
+								sx={{
+									fontWeight: 'bold',
+									mb: 1,
+									color: 'primary.main',
+								}}
+							>
+								{mapType} Detail
+							</Typography>
+
+							<Typography variant="body2" sx={{ mb: 0.5 }}>
 								<strong>Average Debt Ratio:</strong>{' '}
-								{currentStateDebt.average_debt
-									? `${currentStateDebt.average_debt.toLocaleString()}`
-									: 'No Data'}
+								{currentStateDebt.average_debt?.toFixed(2) ||
+									'N/A'}
 							</Typography>
-							{currentStateDebt &&
-								'number_of_counties' in currentStateDebt && (
-									<Typography variant="body2">
-										<strong>Number of Counties:</strong>{' '}
-										{currentStateDebt.number_of_counties
-											? `${currentStateDebt.number_of_counties.toLocaleString()}`
-											: 'Unknown'}
-									</Typography>
-								)}
+
+							{'number_of_counties' in currentStateDebt && (
+								<Typography variant="body2" sx={{ mb: 0.5 }}>
+									<strong>Total Counties:</strong>{' '}
+									{currentStateDebt.number_of_counties}
+								</Typography>
+							)}
+
 							<Typography variant="body2">
-								<strong>Fips Code:</strong>{' '}
-								{currentStateDebt.fips_code
-									? `${currentStateDebt.fips_code.toLocaleString()}`
-									: 'Unknown'}
+								<strong>FIPS Code:</strong>{' '}
+								{currentStateDebt.fips_code}
 							</Typography>
-						</>
+						</Box>
 					)}
 				</Box>
 			</Box>
