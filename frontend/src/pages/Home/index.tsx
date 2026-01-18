@@ -1,227 +1,34 @@
-import {
-	Autocomplete,
-	Box,
-	Slider,
-	TextField,
-	Tooltip,
-	Typography,
-} from '@mui/material'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type {
-	CountyDebt,
-	CountyExtended,
-	Debt,
-	State,
-	StateDebt,
-} from '../../services/household_debt_api'
-import { api } from '../../services/api.ts'
-import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
-import { toTitleCase } from '../../utils/helpers.ts'
+import { Box, Typography } from '@mui/material'
+import { useState, useMemo } from 'react'
 import { scaleSequential } from 'd3-scale'
 import { interpolateViridis } from 'd3-scale-chromatic'
+import { useDebtData } from '../../hooks/useDebtData.ts'
+import { useDebtSelection } from '../../hooks/useDebtSelection.ts'
+import TimelineSlider from '../../components/TimelineSlider'
+import DebtMap from '../../components/DebtMap'
 import MapLegend from '../../components/MapLegend'
-
-const MAP_LAYERS = {
-	State: '/data/states-10m.json',
-	County: '/data/counties-10m.json',
-}
+import SidebarControls from '../../components/SidebarControls'
 
 const Home = () => {
-	const [states, setStates] = useState<State[]>([])
-	const [countys, setCountys] = useState<CountyExtended[]>([])
-	const [currentState, setCurrentState] = useState<State | null>(null)
-	const [currentCounty, setCurrentCounty] = useState<CountyExtended | null>(
-		null
-	)
 	const [timeIndex, setTimeIndex] = useState<number>(104)
-	const [data, setData] = useState<Debt[]>([])
-	const [heatmapData, setHeatmapData] = useState<StateDebt[] | CountyDebt[]>(
-		[]
-	)
-	const [currentStateDebt, setCurrentStateDebt] = useState<
-		StateDebt | CountyDebt | null
-	>(null)
-	const [hoveredState, setHoveredState] = useState<string | null>(null)
 	const [mapType, setMapType] = useState<string>('State')
-	const [selectedFips, setSelectedFips] = useState<string | null>(null)
 
-	const geoUrl = MAP_LAYERS[mapType as keyof typeof MAP_LAYERS]
-	const sliderMarks = [
-		{ value: 0, label: '1999' },
-		{ value: 24, label: '2005' },
-		{ value: 44, label: '2010' },
-		{ value: 64, label: '2015' },
-		{ value: 84, label: '2020' },
-		{ value: 104, label: '2025' },
-	]
+	const { dataMap } = useDebtData(timeIndex, mapType)
+
+	const {
+		selectedFips,
+		currentSelectionData,
+		staticData,
+		handleRegionClick,
+		handleDropdownSelect,
+	} = useDebtSelection(timeIndex, mapType)
+
 	const colorScale = useMemo(() => {
 		const maxRatio = mapType === 'State' ? 2.1 : 3.0
 		return scaleSequential()
-			.domain([0.0, maxRatio]) // The min and max debt ratios
+			.domain([0.0, maxRatio])
 			.interpolator(interpolateViridis)
-	}, [])
-
-	const getQuarterLabel = (index: number) => {
-		const startYear = 1999
-		const year = startYear + Math.floor(index / 4)
-		const quarter = (index % 4) + 1
-		return `${year}-Q${quarter}`
-	}
-
-	const getQuarterDates = (index: number) => {
-		const startYear = 1999
-		const year = startYear + Math.floor(index / 4)
-		const quarterMonth = (index % 4) * 3
-
-		const startDate = new Date(year, quarterMonth, 1)
-			.toISOString()
-			.split('T')[0]
-		const endDate = new Date(year, quarterMonth + 3, 0)
-			.toISOString()
-			.split('T')[0]
-
-		return { startDate, endDate }
-	}
-
-	const handleSliderChange = (_event: Event, newValue: number | number[]) => {
-		setTimeIndex(newValue as number)
-	}
-
-	const handleSliderCommitted = (
-		_event: React.SyntheticEvent | Event,
-		newValue: number | number[]
-	) => {
-		const index = newValue as number
-		const { startDate, endDate } = getQuarterDates(index)
-
-		api.debts
-			.getDebtsDebtsGet({
-				startDate: startDate,
-				endDate: endDate,
-			})
-			.then((response) => setData(response.data))
-	}
-
-	useEffect(() => {
-		const loadData = async () => {
-			try {
-				const responseStates = await api.states.getStatesStatesGet()
-				const sortedStates = responseStates.data.sort((a, b) =>
-					a.name.localeCompare(b.name)
-				)
-				setStates(sortedStates)
-				const responseCounties =
-					await api.counties.getCountiesCountiesGet()
-				const sortedCounties = responseCounties.data.sort((a, b) =>
-					a.name.localeCompare(b.name)
-				)
-				setCountys(sortedCounties)
-			} catch (error) {
-				console.error('Failed to fetch states', error)
-			}
-		}
-		loadData()
-	}, [])
-
-	useEffect(() => {
-		const fetchHeatmapData = async () => {
-			const { startDate, endDate } = getQuarterDates(timeIndex)
-			try {
-				let response
-				if (mapType === 'County') {
-					response = await api.debts.getCountiesDebtDebtsCountiesGet({
-						startDate,
-						endDate,
-					})
-				} else {
-					response = await api.debts.getStatesDebtDebtsStatesGet({
-						startDate,
-						endDate,
-					})
-				}
-				setHeatmapData(response.data)
-			} catch (error) {
-				console.error('Failed to fetch heatmap data', error)
-			}
-		}
-
-		fetchHeatmapData()
-	}, [timeIndex, mapType])
-
-	const statesDataMap = useMemo(() => {
-		return new Map(heatmapData.map((item) => [item.fips_code, item]))
-	}, [heatmapData])
-
-	const handleMouseDown = useCallback(
-		async (geo: any) => {
-			const { startDate, endDate } = getQuarterDates(timeIndex)
-
-			if (mapType === 'County') {
-				const fipsCode = geo.id.toString().padStart(5, '0')
-				setSelectedFips(fipsCode) // Link selection
-				try {
-					const response = await api.debts.getCountyDebtDebtsCountiesFipsCodeGet({
-						fipsCode,
-						startDate,
-						endDate,
-					})
-					setCurrentStateDebt(response.data)
-					const countyObj = countys.find(c => c.fips_code === fipsCode)
-					if (countyObj) setCurrentCounty(countyObj)
-				} catch (error) {
-					console.error('County fetch failed', error)
-				}
-			} else {
-				const stateName = geo.properties.name
-				const stateObj = states.find((s) => s.name === stateName.toUpperCase())
-
-				if (stateObj) {
-					setCurrentState(stateObj)
-					// ADD THIS: Ensure State highlights on click
-					const stateFips = geo.id.toString().padStart(2, '0')
-					setSelectedFips(stateFips)
-
-					try {
-						const response = await api.debts.getStateDebtDebtsStatesStateCodeGet({
-							stateCode: stateObj.code,
-							startDate,
-							endDate,
-						})
-						setCurrentStateDebt(response.data)
-					} catch (error) {
-						console.error('Debt fetch failed', error)
-						setCurrentStateDebt(null)
-					}
-				}
-			}
-		},
-		[timeIndex, mapType, states, countys]
-	)
-
-	useEffect(() => {
-		const updateSelectedStateData = async () => {
-			if (currentState) {
-				const { startDate, endDate } = getQuarterDates(timeIndex)
-
-				try {
-					const response =
-						await api.debts.getStateDebtDebtsStatesStateCodeGet({
-							stateCode: currentState.code,
-							startDate,
-							endDate,
-						})
-					setCurrentStateDebt(response.data)
-				} catch (error) {
-					console.error(
-						'Failed to sync state debt on time change',
-						error
-					)
-				}
-			}
-		}
-
-		updateSelectedStateData()
-	}, [timeIndex, currentState])
+	}, [mapType])
 
 	return (
 		<Box
@@ -229,253 +36,52 @@ const Home = () => {
 			flexDirection="column"
 			alignItems="center"
 			justifyContent="center"
-			sx={{ width: '100vw', mt: '1rem' }}
+			sx={{ height: '93vh',        // Force full viewport height
+				width: '95vw',         // Force full viewport width
+				display: 'flex',
+				flexDirection: 'column',
+				overflow: 'hidden',
+				boxSizing: 'border-box' }}
 		>
-			<Typography align="center" variant="h2">
+			<Typography align="center" variant="h3" mt="1rem">
 				Household Debt Visualizer
 			</Typography>
-			<Box
-				sx={{
-					width: '80%',
-					maxWidth: '50rem',
-					mt: '.5rem',
-					px: 4,
-				}}
-			>
-				<Typography id="time-slider-label" gutterBottom align="center">
-					Data Period: <strong>{getQuarterLabel(timeIndex)}</strong>
-				</Typography>
-				<Slider
-					value={timeIndex}
-					min={0}
-					max={104}
-					step={1}
-					marks={sliderMarks}
-					onChange={handleSliderChange}
-					onChangeCommitted={handleSliderCommitted}
-					valueLabelDisplay="auto"
-					valueLabelFormat={getQuarterLabel}
-					aria-labelledby="time-slider-label"
-				/>
+
+			<Box sx={{ width: '80%', maxWidth: '50rem', mt: '.5rem' }}>
+				<TimelineSlider value={timeIndex} onChange={setTimeIndex} />
 			</Box>
+
 			<Box
 				sx={{
 					display: 'flex',
-					flexDirection: {
-						xs: 'column',
-						md: 'row',
-					},
+					flexDirection: { xs: 'column', md: 'row' },
 					width: '100%',
 					maxWidth: '75.9rem',
 					gap: 4,
 					alignItems: 'flex-start',
+					mt: 4,
 				}}
 			>
-				<Box
-					sx={{
-						flexGrow: 1,
-						width: '58rem',
-					}}
-				>
-					<Tooltip
-						title={hoveredState || ''}
-						followCursor
-						arrow
-						disableInteractive
-						enterTouchDelay={0}
-					>
-						<ComposableMap
-							projection="geoAlbersUsa"
-							style={{
-								width: '100%',
-								height: 'auto',
-							}}
-						>
-							<Geographies geography={geoUrl}>
-								{({ geographies }) =>
-									geographies.map((geo) => {
-										const isCounty = mapType === 'County'
-										const fips = geo.id
-											.toString()
-											.padStart(isCounty ? 5 : 2, '0')
-										const areaData = statesDataMap.get(fips)
-										const isSelected = selectedFips === fips // Logical link
-
-										return (
-											<Geography
-												key={geo.rsmKey}
-												geography={geo}
-												onMouseEnter={() => setHoveredState(geo.properties.name)}
-												onMouseLeave={() => setHoveredState(null)}
-												onMouseDown={() => handleMouseDown(geo)}
-												fill={
-													isSelected
-														? '#3b82f6' // Highlight color for dropdown selection
-														: areaData
-															? colorScale(
-																	areaData.average_debt
-																)
-															: '#F5F5F5'
-												}
-												stroke={
-													isSelected
-														? '#FFFFFF'
-														: '#DDD'
-												} // Add white border to selection
-												strokeWidth={
-													isSelected ? 2 : 0.5
-												}
-												style={{
-													default: {
-														outline: 'none',
-														transition: 'all 0.2s',
-													},
-													hover: {
-														fill: '#60a5fa',
-														outline: 'none',
-														cursor: 'pointer',
-													},
-													pressed: {
-														outline: 'none',
-													},
-												}}
-											/>
-										)
-									})
-								}
-							</Geographies>
-						</ComposableMap>
-					</Tooltip>
+				<Box sx={{ flexGrow: 1, width: '58rem' }}>
+					<DebtMap
+						mapType={mapType}
+						dataMap={dataMap}
+						selectedFips={selectedFips}
+						onRegionSelect={handleRegionClick}
+						colorScale={colorScale}
+					/>
 					<MapLegend scale={colorScale} />
 				</Box>
-				<Box
-					sx={{
-						display: 'flex',
-						flexDirection: 'column',
-						gap: 2,
-						width: '20rem',
-						padding: '.5rem',
-					}}
-				>
-					<Typography variant="h6">Filters</Typography>
 
-					<Autocomplete
-						options={Object.keys(MAP_LAYERS)}
-						value={mapType}
-						onChange={(_event, newValue) => {
-							if (newValue) {
-								setMapType(newValue)
-								setCurrentState(null)
-								setCurrentCounty(null)
-								setCurrentStateDebt(null)
-							}
-						}}
-						renderInput={(params) => (
-							<TextField {...params} label="Select Map View" />
-						)}
+				<Box sx={{ width: '20rem' }}>
+					<SidebarControls
+						mapType={mapType}
+						onMapTypeChange={setMapType}
+						states={staticData.states}
+						counties={staticData.counties}
+						onSelectionChange={handleDropdownSelect}
+						detailData={currentSelectionData}
 					/>
-
-					{mapType === 'State' ? (
-						<Autocomplete
-							value={currentState}
-							options={states}
-							getOptionLabel={(option) =>
-								toTitleCase(option.name)
-							}
-							onChange={(_event, newValue) => {
-								if (newValue) {
-									setCurrentState(newValue)
-									const { startDate, endDate } =
-										getQuarterDates(timeIndex)
-									api.debts
-										.getStateDebtDebtsStatesStateCodeGet({
-											stateCode: newValue.code,
-											startDate,
-											endDate,
-										})
-										.then((res) =>
-											setCurrentStateDebt(res.data)
-										)
-								}
-							}}
-							renderInput={(params) => (
-								<TextField {...params} label="Search States" />
-							)}
-						/>
-					) : (
-						<Autocomplete
-							value={currentCounty}
-							options={countys}
-							getOptionLabel={(option) =>
-								`${toTitleCase(option.name)}, ${option.state_code}`
-							}
-							onChange={(_event, newValue) => {
-								if (newValue) {
-									setCurrentCounty(newValue)
-									setSelectedFips(newValue.fips_code)
-									const { startDate, endDate } =
-										getQuarterDates(timeIndex)
-									api.debts
-										.getCountyDebtDebtsCountiesFipsCodeGet({
-											fipsCode: newValue.fips_code,
-											startDate,
-											endDate,
-										})
-										.then((res) =>
-											setCurrentStateDebt(res.data)
-										)
-								}
-							}}
-							renderInput={(params) => (
-								<TextField
-									{...params}
-									label="Search Counties"
-								/>
-							)}
-						/>
-					)}
-
-					{currentStateDebt && (
-						<Box
-							sx={{
-								mt: 2,
-								p: 2,
-								bgcolor: 'background.paper',
-								borderRadius: 1,
-								boxShadow: 1,
-								borderLeft: '4px solid #60a5fa',
-							}}
-						>
-							<Typography
-								variant="subtitle1"
-								sx={{
-									fontWeight: 'bold',
-									mb: 1,
-									color: 'primary.main',
-								}}
-							>
-								{mapType} Detail
-							</Typography>
-
-							<Typography variant="body2" sx={{ mb: 0.5 }}>
-								<strong>Average Debt Ratio:</strong>{' '}
-								{currentStateDebt.average_debt?.toFixed(2) ||
-									'N/A'}
-							</Typography>
-
-							{'number_of_counties' in currentStateDebt && (
-								<Typography variant="body2" sx={{ mb: 0.5 }}>
-									<strong>Total Counties:</strong>{' '}
-									{currentStateDebt.number_of_counties}
-								</Typography>
-							)}
-
-							<Typography variant="body2">
-								<strong>FIPS Code:</strong>{' '}
-								{currentStateDebt.fips_code}
-							</Typography>
-						</Box>
-					)}
 				</Box>
 			</Box>
 		</Box>
